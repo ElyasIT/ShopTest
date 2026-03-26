@@ -1,5 +1,9 @@
 package main;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.time.LocalDate;
 import model.Amount;
 import model.Client;
 import model.Product;
@@ -21,67 +25,7 @@ public class Shop {
     }
 
     public static void main(String[] args) {
-        Shop shop = new Shop();
-
-        // Iniciar sesión antes del menú (Punto 6)
-        shop.initSession();
-
-        Scanner scanner = new Scanner(System.in);
-        int opcion = 0;
-        boolean exit = false;
-
-        do {
-            System.out.println("\n===========================");
-            System.out.println("Menu principal miTienda.com");
-            System.out.println("===========================");
-            System.out.println("1) Contar caja");
-            System.out.println("2) Añadir producto");
-            System.out.println("3) Añadir stock");
-            System.out.println("4) Marcar producto proxima caducidad");
-            System.out.println("5) Ver inventario");
-            System.out.println("6) Venta");
-            System.out.println("7) Ver ventas");
-            System.out.println("8) Ver venta total");
-            System.out.println("9) Eliminar producto");
-            System.out.println("10) Salir programa");
-            System.out.print("Seleccione una opción: ");
-            opcion = scanner.nextInt();
-
-            switch (opcion) {
-                case 1:
-                    shop.showCash();
-                    break;
-                case 2:
-                    shop.addProduct();
-                    break;
-                case 3:
-                    shop.addStock();
-                    break;
-                case 4:
-                    shop.setExpired();
-                    break;
-                case 5:
-                    shop.showInventory();
-                    break;
-                case 6:
-                    shop.sale();
-                    break;
-                case 7:
-                    shop.showSales();
-                    break;
-                case 8:
-                    // shop.showTotalAmount(); 
-                    break;
-                case 9:
-                    shop.eliminateProduct();
-                    break;
-                case 10:
-                    exit = true;
-                    break;
-                default:
-                    System.out.println("Opción no válida");
-            }
-        } while (!exit);
+        new view.LoginView();
     }
 
     public void initSession() {
@@ -112,10 +56,40 @@ public class Shop {
     }
 
     public void loadInventory() {
+
+        /*
         inventory.add(new Product("Manzana", new Amount(10.00), true, 10));
         inventory.add(new Product("Pera", new Amount(20.00), true, 20));
         inventory.add(new Product("Hamburguesa", new Amount(30.00), true, 30));
         inventory.add(new Product("Fresa", new Amount(5.00), true, 20));
+         */
+        // Añadir llamada metodo readInventory 
+        readInventory();
+    }
+
+    private void readInventory() {
+        // i. Ubicar fichero inputInventory.txt y ruta de lectura 
+        File f = new File("files/inputInventory.txt");
+        try (Scanner reader = new Scanner(f)) {
+            while (reader.hasNextLine()) {
+                String line = reader.nextLine();
+                if (line.isEmpty()) {
+                    continue;
+                }
+
+                // Procesamiento del formato: Product: Manzana; Wholesaler Price: 10.00; Stock:10; 
+                String[] parts = line.split(";");
+                String name = parts[0].split(":")[1].trim();
+                double price = Double.parseDouble(parts[1].split(":")[1].trim());
+                int stock = Integer.parseInt(parts[2].split(":")[1].trim());
+
+                // ii. Por cada línea del fichero agregar un producto al inventario 
+                this.inventory.add(new Product(name, new Amount(price), true, stock));
+            }
+        } catch (FileNotFoundException e) {
+            System.out.println("Error: No se encuentra el archivo de inventario.");
+
+        }
     }
 
     public Product findProduct(String name) {
@@ -123,42 +97,23 @@ public class Shop {
             if (product != null && product.getName().equalsIgnoreCase(name)) {
                 return product;
             }
+
         }
         return null;
     }
 
-    public void eliminateProduct() {
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("Introduzca el nombre del producto a eliminar: ");
-        String name = scanner.nextLine();
-
-        Product product = findProduct(name);
-
-        if (product != null) {
-            inventory.remove(product);
-            System.out.println("El producto " + name + " ha sido eliminado correctamente.");
-        } else {
-            System.out.println("No se ha encontrado el producto con nombre " + name);
+    public void removeProduct(Product p) {
+        if (p != null) {
+            this.inventory.remove(p);
+            saveInventory(); // <--- Guardamos el cambio
         }
     }
 
-    public void addProduct() {
-        Scanner scanner = new Scanner(System.in);
-        System.out.print("Nombre: ");
-        String name = scanner.nextLine();
-
-        if (findProduct(name) != null) {
-            System.out.println("Producto ya existe!");
-            return;
+    public void addProduct(Product p) {
+        if (p != null) {
+            this.inventory.add(p);
+            saveInventory(); // Persistencia automática
         }
-
-        System.out.print("Precio mayorista: ");
-        double wholesalerPrice = scanner.nextDouble();
-        System.out.print("Stock: ");
-        int stock = scanner.nextInt();
-
-        inventory.add(new Product(name, new Amount(wholesalerPrice), true, stock));
-        System.out.println("Producto añadido con éxito.");
     }
 
     public void addStock() {
@@ -255,12 +210,63 @@ public class Shop {
         System.out.println("Lista de ventas:");
         for (Sale sale : sales) {
             if (sale != null) {
-                System.out.println(sale);
+                System.out.println(sale.toString());
             }
+        }
+        System.out.println("¿Desea exportar las ventas a un fichero? (s/n)");
+        Scanner sc = new Scanner(System.in);
+        if (sc.nextLine().equalsIgnoreCase("s")) {
+            writeSales();
         }
     }
 
     public void showCash() {
         System.out.println("Dinero actual: " + cash);
+    }
+
+    public void writeSales() {
+        String fileName = "files/sales_" + LocalDate.now() + ".txt";
+        try (PrintWriter writer = new PrintWriter(new File(fileName))) {
+            int index = 1;
+            for (Sale s : sales) {
+                // Formato exacto del Documento Funcional 
+                writer.println(index + ";Client " + s.getClient().getName() + ";");
+                writer.print(index + "; Products-");
+                for (int j = 0; j < s.getProducts().size(); j++) {
+                    Product p = s.getProducts().get(j);
+                    writer.print(p.getName() + ", " + p.getPublicPrice().getValue() + "?");
+                    if (j < s.getProducts().size() - 1) {
+                        writer.print("; ");
+                    }
+                }
+                writer.println(";");
+                writer.println(index + "; Amount =" + s.getAmount() + "?;");
+                index++;
+            }
+            javax.swing.JOptionPane.showMessageDialog(null, "Ventas exportadas a " + fileName);
+        } catch (Exception e) {
+            System.out.println("Error al exportar.");
+        }
+    }
+
+    public model.Amount getCash() {
+        return cash;
+    }
+
+    public ArrayList<Product> getInventory() {
+        return inventory;
+    }
+
+    public void saveInventory() {
+        File f = new File("files/inputInventory.txt");
+        try (PrintWriter writer = new PrintWriter(f)) {
+            for (Product p : inventory) {
+                writer.println("Product: " + p.getName() + "; Wholesaler Price: "
+                        + p.getWholesalerPrice().getValue() + "; Stock:" + p.getStock() + ";");
+
+            }
+        } catch (Exception e) {
+            System.out.println("Error al guardar inventario.");
+        }
     }
 }
